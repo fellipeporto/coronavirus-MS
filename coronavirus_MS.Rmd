@@ -1,5 +1,5 @@
 ---
-title: "Homework 6 - Corona Brasil"
+title: "Coronavírus no estado do Mato Grosso do Sul"
 author: "Fellipe Porto"
 date: "24/12/2020"
 output: html_document
