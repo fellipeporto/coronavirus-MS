@@ -1,0 +1,197 @@
+---
+title: "Homework 6 - Corona Brasil"
+author: "Fellipe Porto"
+date: "24/12/2020"
+output: html_document
+---
+
+````{r}
+
+# carregando pacotes
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(readxl)
+library(patchwork)
+library(scales)
+library(ggthemes)
+library(extrafont)
+library(zoo)
+
+
+````
+
+
+````{r}
+
+corona = read.csv2('HIST_PAINEL_COVIDBR_26dez2020.csv',
+                   colClasses = c("character", # Regiao
+                                  "character", # Estado
+                                  "character", # Municipio
+                                  "numeric", # coduf
+                                  "numeric", # codmun
+                                  "numeric", # codRegiaoSaude
+                                  "character", # nomeRegiaoSaude
+                                  "Date", # data
+                                  "numeric", # semanaEpi
+                                  "numeric", # populacaoTCU2019
+                                  "numeric", # casosAcumulado
+                                  "numeric", # casosNovos
+                                  "numeric", # obitosAcumulado
+                                  "numeric", # obitosNovos
+                                  "numeric", # Recuperadosnovos
+                                  "numeric", # emAcompanhamentoNovos
+                                  "factor" # interior/metropolitana
+                   ), encoding = "UTF-8")
+
+
+````
+
+O estudo de caso para essa atividade será a respeito do estado do Mato Grosso do Sul. Um estado que não está entre os mais atingidos, tendo números de casos e óbitos bem menores do que os demais, mas que vê o aumento nos casos após uma rápida queda. 
+
+````{r}
+
+# filtrando estado
+
+coronaMS <- corona %>%
+  filter(!is.na(estado), is.na(codmun), estado=="MS")
+
+
+# evolução de casos 
+
+coronaMS %>%
+  ggplot() +
+  geom_line(mapping = aes(data, casosAcumulado), color = 'blue', size = 1)+
+  theme_tufte()+
+  theme(text = element_text(family = 'Rubik'), 
+        legend.position = 'top',
+        plot.title = element_text(hjust = 0.5, 
+                                  face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))+
+  labs(title = 'Evolução de casos no Mato Grosso do Sul', 
+       x = 'Data', 
+       y = 'Casos')+
+  scale_y_continuous(labels = comma)
+
+# evolução de óbitos
+
+coronaMS %>%
+  ggplot() +
+  geom_line(mapping = aes(data, obitosAcumulado), color = 'red', size = 1)+
+  theme_tufte()+
+  theme(text = element_text(family = 'Rubik'), 
+        legend.position = 'top',
+        plot.title = element_text(hjust = 0.5, 
+                                  face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))+
+  labs(title = 'Evolução de óbitos no Mato Grosso do Sul', 
+       x = 'Data', 
+       y = 'Óbitos')
+
+````
+
+Como é possível observar, as linhas seguem subindo, apesar de uma tímida mudança após outubro, que poderia significar a queda na série, mas que voltou a subir posteriormente. Essa pequena variação é observada nos dois gráficos, sendo no de casos um pouco mais perceptível. Os gráficos a seguir ajudarão a entender como foi esse período com mais detalhes. 
+
+````{r}
+# media movel de casos
+
+coronaMS %>% 
+  mutate(mediaMovel = rollmean(casosNovos, k = 7, fill = NA)) %>%
+  ggplot(aes(x=data)) +
+  geom_bar(aes(y = casosNovos), stat = "identity", fill = "grey") +
+  geom_line(mapping=aes(x = data, y = mediaMovel), color="red") +
+  theme_tufte()+
+  theme(text = element_text(family = 'Rubik'), 
+        legend.position = 'top')+
+  labs(title = 'Evolução de casos no Mato Grosso do Sul', 
+       subtitle = 'Média móvel de 7 dias',
+       x = 'Data', 
+       y = 'Casos')+
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))
+  
+  
+# media movel de mortes 
+
+coronaMS %>% 
+  mutate(mediaMovel = rollmean(obitosNovos, k = 7, fill = NA)) %>%
+  ggplot(aes(x=data)) +
+  geom_bar(aes(y = obitosNovos), stat = "identity", fill = "grey") +
+  geom_line(mapping=aes(x = data, y = mediaMovel), color="red") +
+  theme_tufte()+
+  theme(text = element_text(family = 'Rubik'), 
+        legend.position = 'top')+
+  labs(title = 'Evolução de óbitos no Mato Grosso do Sul', 
+       subtitle = 'Média móvel de 7 dias',
+       x = 'Data', 
+       y = 'Óbitos')+
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))
+
+
+````
+
+A partir desses últimos gráficos fica mais claro o caminho que os novos casos e óbitos seguiram: uma queda significativa acompanhada de um aumento, que agora se mostra com números maiores do que o do momento anterior à queda, tendo inclusive picos mais altos. O ponto importante aqui é perceber que os óbitos estão acompanhando o aumento dos casos, o que não se observou em outros lugares onde a "segunda onda" foi analisada. 
+
+A seguir veremos quais foram os munícipios mais afetados. 
+
+````{r}
+# municipios mais afetados 
+
+### casos
+
+municipio <- corona %>% 
+  filter(!is.na(estado), !is.na(municipio), estado == 'MS')
+
+top5 <- municipio %>%
+  select(municipio, casosNovos)%>%
+  group_by(municipio) %>%
+  summarise(total = sum(casosNovos)) %>%
+  arrange(desc(total))%>%
+  top_n(6)
+  
+top5 <- top5[-1,]
+
+top5 %>% ggplot(mapping = aes(x = reorder(municipio, -total), y = total))+
+  geom_bar(stat = "identity", fill = 'grey')+
+  labs(title = "Municípios mais afetados",
+    subtitle = "Casos",
+    x = "",
+    y = "Casos",
+    tag = "")+
+  geom_text(aes(label = total, vjust = -0.3) )+
+  theme_tufte()+
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5),
+        text = element_text(family = 'Rubik'))
+
+### obitos
+
+top5_m <- municipio %>%
+  select(municipio, obitosNovos)%>%
+  group_by(municipio) %>%
+  summarise(total = sum(obitosNovos)) %>%
+  arrange(desc(total))%>%
+  top_n(6)
+
+top5_m <- top5_m[-1,]
+
+top5_m %>% ggplot(mapping = aes(x = reorder(municipio, -total), y = total))+
+  geom_bar(stat = "identity", fill = 'grey')+
+  labs(title = "Municípios mais afetados",
+       subtitle = "Óbitos",
+       x = "",
+       y = "Óbitos",
+       tag = "")+
+  geom_text(aes(label = total, vjust = -0.3) )+
+  theme_tufte()+
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5),
+        text = element_text(family = 'Rubik'))
+
+````
+
+Dentre os municípios mais afetados, 4 deles - Campo Grande, Dourados, Três Lagoas, e Corumbá, respectivamente - fazem parte dos [5 mais populosos do estado](https://www.tererenews.com.br/home/municipios-de-mato-grosso-do-sul/). Campo Grande concentra a maioria dos casos e óbitos por COVID 19 no estado. 
+
+
